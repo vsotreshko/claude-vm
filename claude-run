@@ -5,6 +5,7 @@
 
 set -euo pipefail
 
+NO_TMUX=false
 VM_NAME="claude-sandbox"
 VM_CPUS="2"
 VM_MEMORY="4G"
@@ -296,17 +297,26 @@ cmd_run() {
   echo ""
 
   local inner_cmd
-  inner_cmd="
-    export NVM_DIR=\$HOME/.nvm
-    [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh
-    cd '${WORK_DIR}'
-    if tmux has-session -t '${TMUX_SESSION}' 2>/dev/null; then
-      tmux attach -t '${TMUX_SESSION}'
-    else
-      tmux new-session -s '${TMUX_SESSION}' \
-        \"export NVM_DIR=\$HOME/.nvm; [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh; cd '${WORK_DIR}'; claude --dangerously-skip-permissions; bash\"
-    fi
-  "
+  if [ "$NO_TMUX" = true ]; then
+    inner_cmd="
+      export NVM_DIR=\$HOME/.nvm
+      [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh
+      cd '${WORK_DIR}'
+      claude --dangerously-skip-permissions
+    "
+  else
+    inner_cmd="
+      export NVM_DIR=\$HOME/.nvm
+      [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh
+      cd '${WORK_DIR}'
+      if tmux has-session -t '${TMUX_SESSION}' 2>/dev/null; then
+        tmux attach -t '${TMUX_SESSION}'
+      else
+        tmux new-session -s '${TMUX_SESSION}' \
+          \"export NVM_DIR=\$HOME/.nvm; [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh; cd '${WORK_DIR}'; claude --dangerously-skip-permissions; bash\"
+      fi
+    "
+  fi
   multipass exec "$VM_NAME" -- bash -c "$inner_cmd" || true
   cleanup_mount
 }
@@ -385,7 +395,18 @@ usage() {
   echo "    claude-run stop"
   echo "    claude-run update"
   echo ""
+  echo -e "  ${GREEN}Flags:${NC}"
+  echo "    --no-tmux               Run without tmux (native terminal, no session persistence)"
+  echo ""
 }
+
+# Parse flags
+while [[ "${1:-}" == --* ]]; do
+  case "$1" in
+    --no-tmux) NO_TMUX=true; shift ;;
+    *) die "Unknown flag '$1'. Run: claude-run help" ;;
+  esac
+done
 
 case "${1:-run}" in
   run|"")    cmd_run ;;

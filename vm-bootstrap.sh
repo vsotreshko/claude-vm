@@ -151,6 +151,10 @@ sudo systemctl enable ttyd
 sudo systemctl start ttyd
 success "ttyd service enabled"
 
+# ── tmux config ────────────────────────────────────────────────────────────
+echo 'set -g mouse on' > /home/ubuntu/.tmux.conf
+echo 'set -g history-limit 50000' >> /home/ubuntu/.tmux.conf
+
 touch /home/ubuntu/.claude-vm-ready
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
