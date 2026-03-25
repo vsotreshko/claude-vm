@@ -6,6 +6,16 @@ GREEN='\033[0;32m'; BLUE='\033[0;34m'; NC='\033[0m'
 log()     { echo -e "${BLUE}==> ${NC}$1"; }
 success() { echo -e "${GREEN} ✓ ${NC}$1"; }
 
+log "Waiting for apt lock (Ubuntu auto-updater runs on first boot)..."
+sudo systemctl disable --now unattended-upgrades 2>/dev/null || true
+sudo systemctl disable --now apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+while sudo fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
+      >/dev/null 2>&1; do
+  echo "  ... waiting for apt lock"
+  sleep 3
+done
+success "apt lock free"
+
 log "Updating system..."
 sudo apt-get update -qq
 sudo apt-get upgrade -y -qq
