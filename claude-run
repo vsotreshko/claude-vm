@@ -141,7 +141,7 @@ cmd_run() {
         \"export NVM_DIR=\$HOME/.nvm; [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh; cd ${VM_MOUNT_POINT}; claude --dangerously-skip-permissions; bash\"
     fi
   "
-  multipass exec --no-map-user-ids "$VM_NAME" -- bash -c "$inner_cmd" || true
+  multipass exec "$VM_NAME" -- bash -c "$inner_cmd" || true
   cleanup_mount
 }
 
