@@ -22,7 +22,7 @@ die()     { echo -e "${RED} ✗ ${NC}$1"; exit 1; }
 
 PROJECT_DIR="$(pwd)"
 PROJECT_NAME="$(basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/-*$//')"
-VM_MOUNT_POINT="/workspace/${PROJECT_NAME}"
+VM_MOUNT_POINT="${PROJECT_DIR}"
 TMUX_SESSION="claude-${PROJECT_NAME}"
 
 check_prereqs() {
@@ -185,6 +185,17 @@ cmd_status() {
   multipass info "$VM_NAME" | grep -A 20 "Mounts" || echo "    (none)"
 }
 
+cmd_stop() {
+  log "Unmounting all volumes..."
+  multipass umount "$VM_NAME" 2>/dev/null || true
+  log "Stopping VM..."
+  multipass stop "$VM_NAME" --timeout 30 || {
+    warn "Graceful stop timed out, forcing..."
+    multipass stop "$VM_NAME" --force
+  }
+  success "VM stopped"
+}
+
 usage() {
   cat << USAGE
 
@@ -214,7 +225,7 @@ case "${1:-run}" in
   restore)   cmd_restore "$@" ;;
   monitor)   cmd_monitor ;;
   status)    cmd_status ;;
-  stop)      multipass stop "$VM_NAME" ;;
+  stop)      cmd_stop ;;
   update)    multipass exec "$VM_NAME" -- bash -c "source ~/.nvm/nvm.sh && npm update -g @anthropic-ai/claude-code" ;;
   help|--help|-h) usage ;;
   *) die "Unknown command '$1'. Run: claude-run help" ;;
