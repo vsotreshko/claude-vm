@@ -17,16 +17,24 @@ done
 success "apt lock free"
 
 log "Updating system..."
-sudo apt-get update -qq
-sudo apt-get upgrade -y -qq
-sudo apt-get install -y -qq \
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+# Suppress needrestart interactive prompts (belt-and-suspenders)
+if [ -d /etc/needrestart/conf.d ]; then
+  echo '$nrconf{restart} = "a";' | sudo tee /etc/needrestart/conf.d/50-autorestart.conf > /dev/null
+fi
+sudo -E apt-get update -qq
+sudo -E apt-get upgrade -y -qq \
+  -o Dpkg::Options::="--force-confdef" \
+  -o Dpkg::Options::="--force-confold"
+sudo -E apt-get install -y -qq \
   curl git tmux build-essential wget unzip ufw jq ca-certificates gnupg lsb-release
 
 # ── Docker ────────────────────────────────────────────────────────────────────
 log "Installing Docker..."
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-  | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  | sudo gpg --batch --yes --dearmor -o /etc/apt/keyrings/docker.gpg
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
 echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
@@ -58,7 +66,7 @@ success "$(python3 --version)"
 
 # ── Claude Code ───────────────────────────────────────────────────────────────
 log "Installing Claude Code..."
-npm install -g @anthropic/claude-code
+npm install -g @anthropic-ai/claude-code
 success "Claude Code → $(which claude)"
 
 # ── ttyd ──────────────────────────────────────────────────────────────────────

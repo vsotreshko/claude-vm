@@ -50,6 +50,16 @@ ensure_vm() {
     multipass start "$VM_NAME"
     sleep 2
   fi
+
+  # Wait for SSH to be ready
+  log "Waiting for VM SSH..."
+  local retries=0
+  while ! multipass exec "$VM_NAME" -- true 2>/dev/null; do
+    retries=$((retries + 1))
+    [ "$retries" -gt 30 ] && die "VM SSH not ready after 30 attempts"
+    sleep 2
+  done
+  success "VM SSH ready"
 }
 
 ensure_bootstrapped() {
@@ -205,7 +215,7 @@ case "${1:-run}" in
   monitor)   cmd_monitor ;;
   status)    cmd_status ;;
   stop)      multipass stop "$VM_NAME" ;;
-  update)    multipass exec "$VM_NAME" -- bash -c "source ~/.nvm/nvm.sh && npm update -g @anthropic/claude-code" ;;
+  update)    multipass exec "$VM_NAME" -- bash -c "source ~/.nvm/nvm.sh && npm update -g @anthropic-ai/claude-code" ;;
   help|--help|-h) usage ;;
   *) die "Unknown command '$1'. Run: claude-run help" ;;
 esac
