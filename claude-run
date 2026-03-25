@@ -11,7 +11,7 @@ VM_MEMORY="4G"
 VM_DISK="30G"
 UBUNTU_VERSION="22.04"
 BOOTSTRAP_LOCAL="$HOME/.claude-vm/vm-bootstrap.sh"
-BOOTSTRAP_URL="https://raw.githubusercontent.com/yourname/claude-vm/main/vm-bootstrap.sh"
+BOOTSTRAP_URL="https://raw.githubusercontent.com/vsotreshko/claude-vm/main/vm-bootstrap.sh"
 TTYD_PORT="7681"
 
 GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
