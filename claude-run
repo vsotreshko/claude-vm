@@ -26,7 +26,14 @@ VM_MOUNT_POINT="/workspace/${PROJECT_NAME}"
 TMUX_SESSION="claude-${PROJECT_NAME}"
 
 check_prereqs() {
-  command -v multipass &>/dev/null || die "Multipass not found. Run: brew install multipass"
+  if ! command -v brew &>/dev/null; then
+    die "Homebrew not found. Install it first: https://brew.sh"
+  fi
+  if ! command -v multipass &>/dev/null; then
+    log "Multipass not found — installing..."
+    brew install multipass
+    success "Multipass installed"
+  fi
 }
 
 ensure_vm() {
@@ -70,11 +77,22 @@ ensure_host_docker_internal() {
 }
 
 ensure_mounted() {
-  if multipass info "$VM_NAME" | grep -qF "$PROJECT_DIR"; then return 0; fi
-  log "Mounting $PROJECT_DIR → VM:$VM_MOUNT_POINT"
-  multipass exec "$VM_NAME" -- sudo mkdir -p "$VM_MOUNT_POINT"
-  multipass mount "$PROJECT_DIR" "$VM_NAME":"$VM_MOUNT_POINT"
-  success "Mounted"
+  # Mount project
+  if ! multipass info "$VM_NAME" | grep -qF "$PROJECT_DIR"; then
+    log "Mounting $PROJECT_DIR → VM:$VM_MOUNT_POINT"
+    multipass exec "$VM_NAME" -- sudo mkdir -p "$VM_MOUNT_POINT"
+    multipass mount "$PROJECT_DIR" "$VM_NAME":"$VM_MOUNT_POINT"
+    success "Mounted project"
+  fi
+
+  # Mount ~/.claude so global memory persists on your Mac
+  local claude_config="$HOME/.claude"
+  mkdir -p "$claude_config"
+  if ! multipass info "$VM_NAME" | grep -qF "$claude_config"; then
+    log "Mounting ~/.claude → VM:/home/ubuntu/.claude"
+    multipass mount "$claude_config" "$VM_NAME":/home/ubuntu/.claude
+    success "Mounted Claude config"
+  fi
 }
 
 cleanup_mount() {
