@@ -20,10 +20,46 @@ success() { echo -e "${GREEN} ✓ ${NC}$1"; }
 warn()    { echo -e "${YELLOW} ⚠ ${NC}$1"; }
 die()     { echo -e "${RED} ✗ ${NC}$1"; exit 1; }
 
+WORK_DIR="$(pwd)"
 PROJECT_DIR="$(pwd)"
 PROJECT_NAME="$(basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/-*$//')"
+
+# Detect monorepo root by walking up to find lock file
+find_project_root() {
+  local dir="$WORK_DIR"
+  while [ "$dir" != "/" ]; do
+    if [ -f "$dir/pnpm-lock.yaml" ] || [ -f "$dir/package-lock.json" ] || [ -f "$dir/yarn.lock" ] || [ -f "$dir/pnpm-workspace.yaml" ]; then
+      echo "$dir"
+      return
+    fi
+    dir="$(dirname "$dir")"
+  done
+  echo "$WORK_DIR"
+}
+
+PROJECT_DIR="$(find_project_root)"
 VM_MOUNT_POINT="${PROJECT_DIR}"
 TMUX_SESSION="claude-${PROJECT_NAME}"
+
+LOCK_FILE="/tmp/claude-vm.lock"
+
+acquire_lock() {
+  while ! ( set -o noclobber; echo $$ > "$LOCK_FILE" ) 2>/dev/null; do
+    # Check if the holding process is still alive
+    local holder
+    holder=$(cat "$LOCK_FILE" 2>/dev/null)
+    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then
+      rm -f "$LOCK_FILE"
+      continue
+    fi
+    sleep 1
+  done
+  trap 'rm -f "$LOCK_FILE"' EXIT
+}
+
+release_lock() {
+  rm -f "$LOCK_FILE"
+}
 
 check_prereqs() {
   if ! command -v brew &>/dev/null; then
@@ -69,7 +105,8 @@ ensure_bootstrapped() {
     if [ -f "$BOOTSTRAP_LOCAL" ]; then
       script="$BOOTSTRAP_LOCAL"
     else
-      script="/tmp/vm-bootstrap-$$.sh"
+      script=$(mktemp /tmp/vm-bootstrap-XXXXXX.sh)
+      trap 'rm -f "$script"' EXIT
       curl -fsSL "$BOOTSTRAP_URL" -o "$script" \
         || die "Bootstrap not found. Put vm-bootstrap.sh at $BOOTSTRAP_LOCAL"
     fi
@@ -86,9 +123,26 @@ ensure_host_docker_internal() {
   multipass exec "$VM_NAME" -- sudo /usr/local/bin/update-host-docker-internal.sh 2>/dev/null || true
 }
 
+sync_hosts() {
+  # Copy Mac /etc/hosts entries to VM, rewriting 127.0.0.1 to Mac's real IP
+  # so that .local domains resolve to the Mac (via SSH tunnel) not the VM itself
+  multipass transfer /etc/hosts "$VM_NAME":/tmp/mac-hosts 2>/dev/null || return 0
+  multipass exec "$VM_NAME" -- bash -c "
+    # Remove old synced entries
+    sudo sed -i '/# claude-vm-sync/d' /etc/hosts
+    # Re-add with 127.0.0.1 preserved (SSH tunnel makes localhost reach Mac)
+    grep -E '^127\.0\.0\.1\s' /tmp/mac-hosts | grep -vE '(localhost|broadcasthost)' | while IFS= read -r line; do
+      hostnames=\$(echo \"\$line\" | awk '{\$1=\"\"; print}' | xargs)
+      [ -z \"\$hostnames\" ] && continue
+      echo \"127.0.0.1 \$hostnames # claude-vm-sync\" | sudo tee -a /etc/hosts > /dev/null
+    done
+    rm -f /tmp/mac-hosts
+  " 2>/dev/null || true
+}
+
 ensure_mounted() {
   # Mount project
-  if ! multipass info "$VM_NAME" | grep -qF "$PROJECT_DIR"; then
+  if ! multipass info "$VM_NAME" | grep -q "$PROJECT_DIR\b"; then
     log "Mounting $PROJECT_DIR → VM:$VM_MOUNT_POINT"
     multipass exec "$VM_NAME" -- sudo mkdir -p "$VM_MOUNT_POINT"
     multipass mount "$PROJECT_DIR" "$VM_NAME":"$VM_MOUNT_POINT"
@@ -98,10 +152,56 @@ ensure_mounted() {
   # Mount ~/.claude so global memory persists on your Mac
   local claude_config="$HOME/.claude"
   mkdir -p "$claude_config"
-  if ! multipass info "$VM_NAME" | grep -qF "$claude_config"; then
+  if ! multipass info "$VM_NAME" | grep -q "$claude_config\b"; then
     log "Mounting ~/.claude → VM:/home/ubuntu/.claude"
     multipass mount "$claude_config" "$VM_NAME":/home/ubuntu/.claude
     success "Mounted Claude config"
+  fi
+
+  # Overlay node_modules with a VM-local copy so Linux-native binaries work
+  ensure_node_modules_overlay
+}
+
+ensure_node_modules_overlay() {
+  local vm_nm_store="/home/ubuntu/.node_modules_overlay${VM_MOUNT_POINT}"
+
+  # Find all node_modules directories at project root and one level deep (monorepo)
+  local nm_dirs
+  nm_dirs=$(find "$PROJECT_DIR" -maxdepth 3 -name node_modules -type d 2>/dev/null | head -20)
+  [ -z "$nm_dirs" ] && return 0
+
+  local needs_install=false
+  while IFS= read -r local_nm; do
+    local rel_path="${local_nm#"$PROJECT_DIR"}"
+    local vm_nm="${vm_nm_store}${rel_path}"
+    local vm_target="${VM_MOUNT_POINT}${rel_path}"
+
+    # Create VM-local dir and bind-mount over the mounted node_modules
+    if ! multipass exec "$VM_NAME" -- mountpoint -q "$vm_target" 2>/dev/null; then
+      log "Overlaying VM-local node_modules for ${rel_path%/node_modules}..."
+      multipass exec "$VM_NAME" -- mkdir -p "$vm_nm"
+      multipass exec "$VM_NAME" -- sudo mount --bind "$vm_nm" "$vm_target"
+      needs_install=true
+    fi
+  done <<< "$nm_dirs"
+
+  if [ "$needs_install" = true ]; then
+    log "Installing Linux-native dependencies in VM..."
+    # Detect package manager
+    local pkg_cmd="npm install"
+    if [ -f "$PROJECT_DIR/pnpm-lock.yaml" ]; then
+      # Ensure pnpm is available and store is VM-local (not on mounted volume)
+      multipass exec "$VM_NAME" -- bash -c "export NVM_DIR=\$HOME/.nvm; [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh; command -v pnpm || npm install -g pnpm; pnpm config set store-dir /home/ubuntu/.pnpm-store" 2>/dev/null
+      pkg_cmd="pnpm install"
+    elif [ -f "$PROJECT_DIR/yarn.lock" ]; then
+      pkg_cmd="yarn install"
+    fi
+    multipass exec "$VM_NAME" -- bash -c "
+      export NVM_DIR=\$HOME/.nvm
+      [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh
+      cd '${VM_MOUNT_POINT}'
+      $pkg_cmd
+    " && success "Dependencies installed" || warn "Dependency install failed — run '$pkg_cmd' manually inside the VM"
   fi
 }
 
@@ -111,6 +211,67 @@ cleanup_mount() {
   fi
 }
 
+SSH_KEY_DIR="$HOME/.claude-vm/ssh"
+TUNNEL_PID_FILE="/tmp/claude-vm-tunnel.pid"
+
+ensure_port_forwarding() {
+  # Auto-detect ports listening on Mac (localhost and all interfaces)
+  local ports
+  ports=$(lsof -iTCP -sTCP:LISTEN -n -P 2>/dev/null \
+    | awk '/\*:/ || /127\.0\.0\.1:/ {split($9, a, ":"); print a[2]}' \
+    | sort -un)
+  [ -z "$ports" ] && return 0
+
+  local vm_ip
+  vm_ip=$(multipass info "$VM_NAME" | grep IPv4 | awk '{print $2}')
+  [ -z "$vm_ip" ] && return 0
+
+  # Set up SSH key for tunneling (one-time)
+  if [ ! -f "$SSH_KEY_DIR/tunnel_key" ]; then
+    mkdir -p "$SSH_KEY_DIR"
+    ssh-keygen -t ed25519 -f "$SSH_KEY_DIR/tunnel_key" -N "" -q
+    multipass transfer "$SSH_KEY_DIR/tunnel_key.pub" "$VM_NAME":/tmp/claude-vm-tunnel.pub
+    multipass exec "$VM_NAME" -- bash -c "
+      mkdir -p ~/.ssh && chmod 700 ~/.ssh
+      cat /tmp/claude-vm-tunnel.pub >> ~/.ssh/authorized_keys
+      chmod 600 ~/.ssh/authorized_keys
+      rm /tmp/claude-vm-tunnel.pub
+    "
+    success "SSH tunnel key installed"
+  fi
+
+  # Kill old tunnel if running
+  if [ -f "$TUNNEL_PID_FILE" ]; then
+    local old_pid
+    old_pid=$(cat "$TUNNEL_PID_FILE")
+    kill "$old_pid" 2>/dev/null || true
+    rm -f "$TUNNEL_PID_FILE"
+  fi
+
+  # Build -R flags for each port
+  local ssh_args=""
+  local port_list=""
+  for port in $ports; do
+    ssh_args="$ssh_args -R ${port}:127.0.0.1:${port}"
+    port_list="${port_list:+$port_list, }$port"
+  done
+
+  # Start reverse tunnel in background
+  ssh -f -N \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o ServerAliveInterval=30 \
+    -o ExitOnForwardFailure=no \
+    -o LogLevel=ERROR \
+    -i "$SSH_KEY_DIR/tunnel_key" \
+    $ssh_args \
+    ubuntu@"$vm_ip" || { warn "SSH tunnel failed"; return 0; }
+
+  # Find the ssh tunnel PID
+  pgrep -f "ssh.*${SSH_KEY_DIR}/tunnel_key.*ubuntu@${vm_ip}" > "$TUNNEL_PID_FILE" 2>/dev/null || true
+  success "Port forwarding (Mac → VM): $port_list"
+}
+
 vm_ip() {
   multipass exec "$VM_NAME" -- tailscale ip -4 2>/dev/null \
     || multipass info "$VM_NAME" | grep IPv4 | awk '{print $2}'
@@ -118,14 +279,19 @@ vm_ip() {
 
 cmd_run() {
   check_prereqs
+  # Lock to prevent parallel races during VM setup
+  acquire_lock
   ensure_vm
   ensure_bootstrapped
   ensure_host_docker_internal
+  sync_hosts
   ensure_mounted
+  ensure_port_forwarding
+  release_lock
 
   log "Launching Claude Code in '$PROJECT_NAME'..."
-  echo -e "  ${BLUE}Local:${NC}   $PROJECT_DIR"
-  echo -e "  ${BLUE}VM:${NC}      $VM_MOUNT_POINT"
+  echo -e "  ${BLUE}Local:${NC}   $WORK_DIR"
+  echo -e "  ${BLUE}Root:${NC}    $PROJECT_DIR"
   echo -e "  ${BLUE}Session:${NC} $TMUX_SESSION"
   echo ""
 
@@ -133,12 +299,12 @@ cmd_run() {
   inner_cmd="
     export NVM_DIR=\$HOME/.nvm
     [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh
-    cd ${VM_MOUNT_POINT}
-    if tmux has-session -t ${TMUX_SESSION} 2>/dev/null; then
-      tmux attach -t ${TMUX_SESSION}
+    cd '${WORK_DIR}'
+    if tmux has-session -t '${TMUX_SESSION}' 2>/dev/null; then
+      tmux attach -t '${TMUX_SESSION}'
     else
-      tmux new-session -s ${TMUX_SESSION} \
-        \"export NVM_DIR=\$HOME/.nvm; [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh; cd ${VM_MOUNT_POINT}; claude --dangerously-skip-permissions; bash\"
+      tmux new-session -s '${TMUX_SESSION}' \
+        \"export NVM_DIR=\$HOME/.nvm; [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh; cd '${WORK_DIR}'; claude --dangerously-skip-permissions; bash\"
     fi
   "
   multipass exec "$VM_NAME" -- bash -c "$inner_cmd" || true
@@ -186,6 +352,11 @@ cmd_status() {
 }
 
 cmd_stop() {
+  # Kill SSH tunnel
+  if [ -f "$TUNNEL_PID_FILE" ]; then
+    kill "$(cat "$TUNNEL_PID_FILE")" 2>/dev/null || true
+    rm -f "$TUNNEL_PID_FILE"
+  fi
   log "Unmounting all volumes..."
   multipass umount "$VM_NAME" 2>/dev/null || true
   log "Stopping VM..."
@@ -197,25 +368,23 @@ cmd_stop() {
 }
 
 usage() {
-  cat << USAGE
-
-  ${BLUE}claude-run${NC} — Run Claude Code in an isolated VM
-
-  ${GREEN}From any project directory:${NC}
-    claude-run              Launch Claude Code in this repo
-    claude-run monitor      Open browser terminal (ttyd)
-    claude-run status       VM info, sessions, mounts
-
-  ${GREEN}Snapshots:${NC}
-    claude-run snapshot [name]
-    claude-run snapshots
-    claude-run restore <name>
-
-  ${GREEN}VM:${NC}
-    claude-run stop
-    claude-run update
-
-USAGE
+  echo ""
+  echo -e "  ${BLUE}claude-run${NC} — Run Claude Code in an isolated VM"
+  echo ""
+  echo -e "  ${GREEN}From any project directory:${NC}"
+  echo "    claude-run              Launch Claude Code in this repo"
+  echo "    claude-run monitor      Open browser terminal (ttyd)"
+  echo "    claude-run status       VM info, sessions, mounts"
+  echo ""
+  echo -e "  ${GREEN}Snapshots:${NC}"
+  echo "    claude-run snapshot [name]"
+  echo "    claude-run snapshots"
+  echo "    claude-run restore <name>"
+  echo ""
+  echo -e "  ${GREEN}VM:${NC}"
+  echo "    claude-run stop"
+  echo "    claude-run update"
+  echo ""
 }
 
 case "${1:-run}" in
@@ -226,7 +395,7 @@ case "${1:-run}" in
   monitor)   cmd_monitor ;;
   status)    cmd_status ;;
   stop)      cmd_stop ;;
-  update)    multipass exec "$VM_NAME" -- bash -c "source ~/.nvm/nvm.sh && npm update -g @anthropic-ai/claude-code" ;;
+  update)    multipass exec "$VM_NAME" -- bash -c "export NVM_DIR=\$HOME/.nvm; [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh; npm install -g @anthropic-ai/claude-code@latest" ;;
   help|--help|-h) usage ;;
   *) die "Unknown command '$1'. Run: claude-run help" ;;
 esac

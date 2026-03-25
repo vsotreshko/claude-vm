@@ -9,8 +9,11 @@ success() { echo -e "${GREEN} ✓ ${NC}$1"; }
 log "Waiting for apt lock (Ubuntu auto-updater runs on first boot)..."
 sudo systemctl disable --now unattended-upgrades 2>/dev/null || true
 sudo systemctl disable --now apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+APT_RETRIES=0
 while sudo fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
       >/dev/null 2>&1; do
+  APT_RETRIES=$((APT_RETRIES + 1))
+  [ "$APT_RETRIES" -gt 60 ] && { echo "apt lock timeout after 3 minutes"; exit 1; }
   echo "  ... waiting for apt lock"
   sleep 3
 done
