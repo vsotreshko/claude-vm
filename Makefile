@@ -3,18 +3,23 @@
 INSTALL_DIR   := /usr/local/bin
 BOOTSTRAP_DIR := $(HOME)/.claude-vm
 
-install: ## Install claude-run to /usr/local/bin and bootstrap script to ~/.claude-vm
+install: ## Install claude-run and claude-docker to /usr/local/bin
 	@echo "==> Installing claude-run to $(INSTALL_DIR)..."
 	@chmod +x claude-run
 	@sudo cp claude-run $(INSTALL_DIR)/claude-run
-	@echo "==> Copying vm-bootstrap.sh to $(BOOTSTRAP_DIR)..."
+	@echo "==> Installing claude-docker to $(INSTALL_DIR)..."
+	@chmod +x claude-docker
+	@sudo cp claude-docker $(INSTALL_DIR)/claude-docker
+	@echo "==> Copying support files to $(BOOTSTRAP_DIR)..."
 	@mkdir -p $(BOOTSTRAP_DIR)
 	@cp vm-bootstrap.sh $(BOOTSTRAP_DIR)/vm-bootstrap.sh
-	@echo " ✓  Done. Run 'claude-run' from any project directory."
+	@cp Dockerfile.claude $(BOOTSTRAP_DIR)/Dockerfile.claude
+	@echo " ✓  Done. Run 'claude-run' or 'claude-docker' from any project directory."
 
-uninstall: ## Remove claude-run from /usr/local/bin
+uninstall: ## Remove claude-run and claude-docker from /usr/local/bin
 	@sudo rm -f $(INSTALL_DIR)/claude-run
-	@echo " ✓  claude-run removed."
+	@sudo rm -f $(INSTALL_DIR)/claude-docker
+	@echo " ✓  claude-run and claude-docker removed."
 	@echo "    VM still exists. To fully remove it:"
 	@echo "    multipass delete claude-sandbox --purge"
 
