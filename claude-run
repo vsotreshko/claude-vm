@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-NO_TMUX=false
+USE_TMUX=false
 VM_NAME="claude-sandbox"
 VM_CPUS="2"
 VM_MEMORY="4G"
@@ -187,22 +187,42 @@ ensure_node_modules_overlay() {
   done <<< "$nm_dirs"
 
   if [ "$needs_install" = true ]; then
-    log "Installing Linux-native dependencies in VM..."
-    # Detect package manager
-    local pkg_cmd="npm install"
-    if [ -f "$PROJECT_DIR/pnpm-lock.yaml" ]; then
-      # Ensure pnpm is available and store is VM-local (not on mounted volume)
-      multipass exec "$VM_NAME" -- bash -c "export NVM_DIR=\$HOME/.nvm; [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh; command -v pnpm || npm install -g pnpm; pnpm config set store-dir /home/ubuntu/.pnpm-store" 2>/dev/null
-      pkg_cmd="pnpm install"
-    elif [ -f "$PROJECT_DIR/yarn.lock" ]; then
-      pkg_cmd="yarn install"
-    fi
-    multipass exec "$VM_NAME" -- bash -c "
-      export NVM_DIR=\$HOME/.nvm
-      [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh
-      cd '${VM_MOUNT_POINT}'
-      $pkg_cmd
-    " && success "Dependencies installed" || warn "Dependency install failed — run '$pkg_cmd' manually inside the VM"
+    # Find directories containing a package.json that also had node_modules overlaid
+    local install_dirs=()
+    while IFS= read -r local_nm; do
+      local pkg_dir="${local_nm%/node_modules}"
+      [ -f "$pkg_dir/package.json" ] && install_dirs+=("$pkg_dir")
+    done <<< "$nm_dirs"
+
+    for install_dir in "${install_dirs[@]}"; do
+      local rel_install="${install_dir#"$PROJECT_DIR"}"
+      local vm_install_dir="${VM_MOUNT_POINT}${rel_install}"
+      log "Installing Linux-native dependencies in ${rel_install:-/}..."
+
+      # Detect package manager per directory (walk up to find lock file)
+      local pkg_cmd="npm install"
+      local search_dir="$install_dir"
+      while [ "$search_dir" != "/" ]; do
+        if [ -f "$search_dir/pnpm-lock.yaml" ]; then
+          multipass exec "$VM_NAME" -- bash -c "export NVM_DIR=\$HOME/.nvm; [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh; command -v pnpm || npm install -g pnpm; pnpm config set store-dir /home/ubuntu/.pnpm-store" 2>/dev/null
+          pkg_cmd="pnpm install"
+          break
+        elif [ -f "$search_dir/yarn.lock" ]; then
+          pkg_cmd="yarn install"
+          break
+        elif [ -f "$search_dir/package-lock.json" ]; then
+          break
+        fi
+        search_dir="$(dirname "$search_dir")"
+      done
+
+      multipass exec "$VM_NAME" -- bash -c "
+        export NVM_DIR=\$HOME/.nvm
+        [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh
+        cd '${vm_install_dir}'
+        $pkg_cmd
+      " && success "Dependencies installed in ${rel_install:-/}" || warn "Dependency install failed in ${rel_install:-/} — run '$pkg_cmd' manually inside the VM"
+    done
   fi
 }
 
@@ -219,7 +239,7 @@ ensure_port_forwarding() {
   # Auto-detect ports listening on Mac (localhost and all interfaces)
   local ports
   ports=$(lsof -iTCP -sTCP:LISTEN -n -P 2>/dev/null \
-    | awk '/\*:/ || /127\.0\.0\.1:/ {split($9, a, ":"); print a[2]}' \
+    | awk '/\*:/ || /127\.0\.0\.1:/ {split($9, a, ":"); port=a[2]+0; if (port>=1 && port<=65535) print port}' \
     | sort -un)
   [ -z "$ports" ] && return 0
 
@@ -297,7 +317,7 @@ cmd_run() {
   echo ""
 
   local inner_cmd
-  if [ "$NO_TMUX" = true ]; then
+  if [ "$USE_TMUX" = false ]; then
     inner_cmd="
       export NVM_DIR=\$HOME/.nvm
       [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh
@@ -396,14 +416,14 @@ usage() {
   echo "    claude-run update"
   echo ""
   echo -e "  ${GREEN}Flags:${NC}"
-  echo "    --no-tmux               Run without tmux (native terminal, no session persistence)"
+  echo "    --tmux                  Run inside tmux (session persistence across detach/reattach)"
   echo ""
 }
 
 # Parse flags
 while [[ "${1:-}" == --* ]]; do
   case "$1" in
-    --no-tmux) NO_TMUX=true; shift ;;
+    --tmux) USE_TMUX=true; shift ;;
     *) die "Unknown flag '$1'. Run: claude-run help" ;;
   esac
 done
