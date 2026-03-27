@@ -150,10 +150,19 @@ cmd_run() {
   local pkg_cmd
   pkg_cmd="$(detect_pkg_manager)"
 
+  # Share host pnpm store with container to avoid re-downloading packages
+  local pnpm_store=""
+  if [[ "$pkg_cmd" == "pnpm install" ]] && command -v pnpm &>/dev/null; then
+    pnpm_store="$(pnpm store path 2>/dev/null | sed 's|/v[0-9].*||')"
+  fi
+  if [ -n "$pnpm_store" ]; then
+    vol_flags+=(-v "$pnpm_store:/home/claude/.pnpm-store")
+  fi
+
   local startup_cmd=""
   # Install pnpm if needed
   if [[ "$pkg_cmd" == "pnpm install" ]]; then
-    startup_cmd="command -v pnpm >/dev/null || sudo npm install -g pnpm; pnpm config set store-dir /home/claude/.pnpm-store; "
+    startup_cmd="command -v pnpm >/dev/null || sudo npm install -g pnpm; pnpm config set --global store-dir /home/claude/.pnpm-store; "
   fi
   # Install deps if node_modules volume is empty and package.json exists
   if [ -f "$PROJECT_DIR/package.json" ]; then
