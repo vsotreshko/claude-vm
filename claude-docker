@@ -38,6 +38,7 @@ CONTAINER_NAME="claude-docker-${PROJECT_NAME}"
 VOLUME_NAME="claude-docker-nm-${PROJECT_NAME}"
 
 USE_TMUX=false
+GCLOUD_LOGIN=false
 
 check_prereqs() {
   if ! command -v docker &>/dev/null; then
@@ -139,6 +140,7 @@ cmd_run() {
   # Optional config mounts
   [ -f "$HOME/.gitconfig" ] && vol_flags+=(-v "$HOME/.gitconfig:/home/claude/.gitconfig:ro")
   [ -d "$HOME/.ssh" ] && vol_flags+=(-v "$HOME/.ssh:/home/claude/.ssh:ro")
+  [ -d "$HOME/.config/gcloud" ] && vol_flags+=(-v "$HOME/.config/gcloud:/home/claude/.config/gcloud")
 
   # Host entries
   local host_flags
@@ -156,6 +158,9 @@ cmd_run() {
   # Install deps if node_modules volume is empty and package.json exists
   if [ -f "$PROJECT_DIR/package.json" ]; then
     startup_cmd="${startup_cmd}if [ ! -d '${PROJECT_DIR}/node_modules/node_modules' ] && [ -z \"\$(ls -A '${PROJECT_DIR}/node_modules' 2>/dev/null)\" ]; then cd '${PROJECT_DIR}' && ${pkg_cmd}; fi; "
+  fi
+  if [ "$GCLOUD_LOGIN" = true ]; then
+    startup_cmd="${startup_cmd}echo '==> Running gcloud auth login...' && gcloud auth login --no-launch-browser && gcloud auth application-default login --no-launch-browser; "
   fi
   startup_cmd="${startup_cmd}cd '${WORK_DIR}' && claude --dangerously-skip-permissions"
 
@@ -244,12 +249,16 @@ usage() {
   echo "    claude-docker clean        Remove container and node_modules volume"
   echo "    claude-docker update       Rebuild the Docker image (no cache)"
   echo ""
+  echo -e "  ${GREEN}Flags:${NC}"
+  echo "    --gcloud-login          Run gcloud auth login before starting Claude"
+  echo ""
 }
 
 # Parse flags
 while [[ "${1:-}" == --* ]]; do
   case "$1" in
     --tmux) USE_TMUX=true; shift ;;
+    --gcloud-login) GCLOUD_LOGIN=true; shift ;;
     *) die "Unknown flag '$1'. Run: claude-docker help" ;;
   esac
 done
