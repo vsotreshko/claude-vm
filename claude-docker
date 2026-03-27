@@ -153,7 +153,7 @@ cmd_run() {
   local startup_cmd=""
   # Install pnpm if needed
   if [[ "$pkg_cmd" == "pnpm install" ]]; then
-    startup_cmd="command -v pnpm >/dev/null || npm install -g pnpm; "
+    startup_cmd="command -v pnpm >/dev/null || sudo npm install -g pnpm; pnpm config set store-dir /home/claude/.pnpm-store; "
   fi
   # Install deps if node_modules volume is empty and package.json exists
   if [ -f "$PROJECT_DIR/package.json" ]; then
