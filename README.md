@@ -36,6 +36,7 @@ claude-docker
 ```
 
 On first run, `claude-docker` will:
+
 1. Build the Docker image (Node LTS + git, tmux, gcloud, Claude Code)
 2. Create a container with your project directory and `~/.claude` mounted
 3. Install npm/pnpm/yarn dependencies if needed
@@ -49,6 +50,7 @@ claude-run
 ```
 
 On first run, `claude-run` will:
+
 1. Install Multipass via Homebrew if not present
 2. Create the `claude-sandbox` VM (Ubuntu 22.04, 2 CPUs, 4 GB RAM, 30 GB disk)
 3. Bootstrap it with Node.js, Python, Docker, Claude Code, ttyd, Tailscale, and UFW
@@ -102,27 +104,27 @@ claude-run update                # update Claude Code to latest
 
 ### claude-docker
 
-| What | Access |
-|---|---|
-| Current project (`pwd`) | Mounted read/write at the same absolute path |
+| What                           | Access                                           |
+| ------------------------------ | ------------------------------------------------ |
+| Current project (`pwd`)        | Mounted read/write at the same absolute path     |
 | `~/.claude` + `~/.claude.json` | Mounted — credentials and session history shared |
-| `~/.gitconfig` | Mounted read-only (if exists) |
-| `~/.ssh` | Mounted read-only (if exists) |
-| `~/.config/gcloud` | Mounted (if exists) |
-| `node_modules` | Docker volume overlay (if package.json exists) |
-| Rest of your home folder | Not visible |
-| `/etc/hosts` entries | Forwarded via `--add-host host-gateway` |
+| `~/.gitconfig`                 | Mounted read-only (if exists)                    |
+| `~/.ssh`                       | Mounted read-only (if exists)                    |
+| `~/.config/gcloud`             | Mounted (if exists)                              |
+| `node_modules`                 | Docker volume overlay (if package.json exists)   |
+| Rest of your home folder       | Not visible                                      |
+| `/etc/hosts` entries           | Forwarded via `--add-host host-gateway`          |
 
 ### claude-run
 
-| What | Access |
-|---|---|
-| Current project (`pwd`) | Mounted read/write at the same absolute path |
-| `~/.claude` | Mounted — credentials and session history shared |
-| Rest of your home folder | Not visible |
-| `localhost:<port>` | Forwarded to your Mac (except SSH, ttyd) |
-| `host.docker.internal:<port>` | Resolved to your Mac |
-| Docker inside VM | Available |
+| What                          | Access                                           |
+| ----------------------------- | ------------------------------------------------ |
+| Current project (`pwd`)       | Mounted read/write at the same absolute path     |
+| `~/.claude`                   | Mounted — credentials and session history shared |
+| Rest of your home folder      | Not visible                                      |
+| `localhost:<port>`            | Forwarded to your Mac (except SSH, ttyd)         |
+| `host.docker.internal:<port>` | Resolved to your Mac                             |
+| Docker inside VM              | Available                                        |
 
 ## Node.js / native binaries
 
@@ -142,6 +144,36 @@ claude-vm/
 ├── Dockerfile.claude       ← Docker image definition
 └── vm-bootstrap.sh         ← runs once inside the VM
 ```
+
+## Playwright MCP configuration
+
+The Playwright MCP server needs a couple of flags to work inside Docker. This config also works on macOS (the flags are harmless outside containers). Add to your `~/.claude.json` under the global `mcpServers` key:
+
+```json
+{
+  "mcpServers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest",
+        "--no-sandbox",
+        "--ignore-https-errors"
+      ],
+      "env": {}
+    }
+  }
+}
+```
+
+| Flag                    | Why                                                              |
+| ----------------------- | ---------------------------------------------------------------- |
+| `--no-sandbox`          | Chromium sandboxing doesn't work inside Docker                   |
+| `--ignore-https-errors` | Allows navigating to sites with self-signed certificates         |
+
+The Docker image pre-installs `@playwright/mcp` globally with a matching Chromium browser, so no `--executable-path` is needed.
+
+> **Note:** If you also have a **project-level** Playwright MCP config (under a project path key in `~/.claude.json`), it will override the global one. Either remove the project-level entry or add the same flags there.
 
 ## Cleanup
 

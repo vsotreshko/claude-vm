@@ -87,25 +87,6 @@ detect_pkg_manager() {
   echo "npm install"
 }
 
-build_host_flags() {
-  local flags=""
-  while IFS= read -r line; do
-    # Skip comments and empty lines
-    [[ "$line" =~ ^[[:space:]]*# ]] && continue
-    [[ -z "$line" ]] && continue
-    # Match 127.0.0.1 entries, skip localhost/broadcasthost
-    if echo "$line" | grep -qE '^127\.0\.0\.1[[:space:]]'; then
-      local hosts
-      hosts=$(echo "$line" | awk '{$1=""; print}' | xargs)
-      for h in $hosts; do
-        [[ "$h" == "localhost" || "$h" == "broadcasthost" ]] && continue
-        flags="$flags --add-host ${h}:host-gateway"
-      done
-    fi
-  done < /etc/hosts 2>/dev/null
-  echo "$flags"
-}
-
 cmd_run() {
   check_prereqs
   ensure_image
@@ -142,10 +123,6 @@ cmd_run() {
   [ -d "$HOME/.ssh" ] && vol_flags+=(-v "$HOME/.ssh:/home/claude/.ssh:ro")
   [ -d "$HOME/.config/gcloud" ] && vol_flags+=(-v "$HOME/.config/gcloud:/home/claude/.config/gcloud")
 
-  # Host entries
-  local host_flags
-  host_flags="$(build_host_flags)"
-
   # Build startup command
   local pkg_cmd
   pkg_cmd="$(detect_pkg_manager)"
@@ -160,9 +137,13 @@ cmd_run() {
   fi
 
   local startup_cmd=""
+  # Fix ownership of node_modules volume (Docker creates it as root)
+  if [ -f "$PROJECT_DIR/package.json" ]; then
+    startup_cmd="${startup_cmd}sudo chown claude:claude '${PROJECT_DIR}/node_modules'; "
+  fi
   # Install pnpm if needed
   if [[ "$pkg_cmd" == "pnpm install" ]]; then
-    startup_cmd="command -v pnpm >/dev/null || sudo npm install -g pnpm; pnpm config set --global store-dir /home/claude/.pnpm-store; "
+    startup_cmd="${startup_cmd}command -v pnpm >/dev/null || sudo npm install -g pnpm; pnpm config set --global store-dir /home/claude/.pnpm-store; "
   fi
   # Install deps if node_modules volume is empty and package.json exists
   if [ -f "$PROJECT_DIR/package.json" ]; then
@@ -173,13 +154,34 @@ cmd_run() {
   fi
   startup_cmd="${startup_cmd}cd '${WORK_DIR}' && claude --dangerously-skip-permissions"
 
+  # Detect host networking support (works on Linux and OrbStack, not Docker Desktop Mac/Win)
+  local net_flags=()
+  if [ "$(uname -s)" = "Linux" ] || docker info 2>/dev/null | grep -q 'Operating System: OrbStack'; then
+    net_flags+=(--network host)
+  else
+    # Fallback: use --add-host so host.docker.internal resolves to the host
+    net_flags+=(--add-host host.docker.internal:host-gateway)
+    # Also map custom hosts from /etc/hosts
+    while IFS= read -r line; do
+      [[ "$line" =~ ^[[:space:]]*# ]] && continue
+      [[ -z "$line" ]] && continue
+      if echo "$line" | grep -qE '^127\.0\.0\.1[[:space:]]'; then
+        for h in $(echo "$line" | awk '{$1=""; print}' | xargs); do
+          [[ "$h" == "localhost" || "$h" == "broadcasthost" ]] && continue
+          net_flags+=(--add-host "${h}:host-gateway")
+        done
+      fi
+    done < /etc/hosts 2>/dev/null
+    warn "Host networking unavailable. Services on host must be accessed via host.docker.internal instead of localhost."
+  fi
+
   # shellcheck disable=SC2086
   docker run -it \
     --name "$CONTAINER_NAME" \
     --hostname "claude-sandbox" \
+    "${net_flags[@]}" \
     "${vol_flags[@]}" \
     -e ANTHROPIC_API_KEY \
-    $host_flags \
     "$IMAGE_NAME" \
     -c "$startup_cmd"
 }
