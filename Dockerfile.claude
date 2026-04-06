@@ -1,7 +1,7 @@
 FROM node:lts-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git tmux build-essential python3 python3-pip python3-venv \
-    curl wget jq ca-certificates sudo && rm -rf /var/lib/apt/lists/*
+    curl wget jq ca-certificates sudo ffmpeg && rm -rf /var/lib/apt/lists/*
 RUN npm install -g @anthropic-ai/claude-code
 # Install Playwright OS deps as root, browsers will be installed as claude user below
 RUN npx playwright install-deps chromium
@@ -14,11 +14,14 @@ RUN curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dea
 ARG HOST_UID=501
 RUN useradd -m -s /bin/bash -G sudo -u $HOST_UID claude && echo 'claude ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 RUN echo 'set -g mouse on' > /home/claude/.tmux.conf && echo 'set -g history-limit 50000' >> /home/claude/.tmux.conf && chown claude:claude /home/claude/.tmux.conf
+# Install Playwright MCP globally as root (needs write access to /usr/local/lib/node_modules)
+RUN npm install -g @playwright/mcp@latest
 USER claude
-# Install Playwright MCP globally and its Chromium browser
-# This ensures the MCP server and browser versions are in sync
-RUN npm install -g @playwright/mcp@latest \
-    && npx playwright install chromium
+# Install Chromium browser as claude user
+RUN npx playwright install chromium
+# Install uv for Python venv management
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/home/claude/.local/bin:$PATH"
 RUN mkdir -p /home/claude/.config /home/claude/.local/share/pnpm
 WORKDIR /work
 ENTRYPOINT ["bash"]
