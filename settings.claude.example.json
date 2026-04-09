@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(cat *)",
+      "Bash(cat:*)",
+      "Bash(cd *)",
+      "Bash(cd:*)",
+      "Bash(curl *)",
+      "Bash(curl:*)",
+      "Bash(echo *)",
+      "Bash(echo:*)",
+      "Bash(find *)",
+      "Bash(find:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git merge-tree:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git show:*)",
+      "Bash(git status:*)",
+      "Bash(grep *)",
+      "Bash(grep:*)",
+      "Bash(head:*)",
+      "Bash(ls *)",
+      "Bash(ls -la *)",
+      "Bash(lsof:*)",
+      "Bash(mkdir *)",
+      "Bash(mkdir:*)",
+      "Bash(node -e:*)",
+      "Bash(node:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run contentful-codegen:generate:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run graphql-codegen:generate:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run test:e2e:*)",
+      "Bash(npm run type-check:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npx dotenv:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx graphql-codegen:*)",
+      "Bash(npx next build:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(npx ts-unused-exports:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx tsx:*)",
+      "Bash(pnpm exec playwright:*)",
+      "Bash(pnpm exec tsc:*)",
+      "Bash(pnpm list:*)",
+      "Bash(pnpm playwright:*)",
+      "Bash(pnpm run graphql-codegen:generate:*)",
+      "Bash(pnpm run test:e2e:*)",
+      "Bash(pnpm run typecheck:*)",
+      "Bash(pnpm test:e2e:*)",
+      "Bash(pnpm turbo build:*)",
+      "Bash(python3:*)",
+      "Bash(source:*)",
+      "Bash(tree:*)",
+      "Bash(wc:*)",
+      "Bash(xargs:*)",
+      "WebFetch(domain:*)",
+      "WebSearch",
+      "mcp__ide__getDiagnostics",
+      "mcp__playwright__*"
+    ],
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(git reset:*)",
+      "Bash(git revert:*)",
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(git cherry-pick:*)"
+    ],
+    "ask": []
+  },
+  "enabledPlugins": {
+    "everything-claude-code@everything-claude-code": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true,
+    "caveman@caveman": true
+  },
+  "extraKnownMarketplaces": {
+    "everything-claude-code": {
+      "source": {
+        "source": "github",
+        "repo": "affaan-m/everything-claude-code"
+      }
+    },
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "JuliusBrussee/caveman"
+      }
+    }
+  },
+  "spinnerTipsEnabled": true,
+  "alwaysThinkingEnabled": true,
+  "showClearContextOnPlanAccept": true,
+  "autoUpdatesChannel": "stable",
+  "prefersReducedMotion": false,
+  "autoMemoryEnabled": true,
+  "autoDreamEnabled": true,
+  "skipDangerousModePermissionPrompt": true,
+  "feedbackSurveyState": {
+    "lastShownTime": 1754055469724
+  }
+}
