@@ -1,15 +1,13 @@
 # claude-vm
 
-Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) inside an isolated sandbox — full autonomy, zero risk to your host machine.
-
-Two isolation backends: a **Multipass VM** (`claude-run`) for full virtualization, or a **Docker container** (`claude-docker`) for a lightweight alternative.
+Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) inside an isolated Docker container — full autonomy, zero risk to your host machine.
 
 ## Why
 
 Claude Code works best with `--dangerously-skip-permissions`, but granting that on your real machine is risky. This project solves that by:
 
-- Running Claude inside a dedicated **sandbox** (VM or container)
-- **Only mounting the current project** — the sandbox has no access to the rest of your machine
+- Running Claude inside a dedicated **Docker container**
+- **Only mounting the current project** — the container has no access to the rest of your machine
 - **Sharing sessions** — project is mounted at the same path as on your Mac, so Claude Code sees your existing conversation history
 - **Sharing credentials** — `~/.claude` and `~/.claude.json` are mounted, so you don't need to log in again
 - Optional **gcloud**, **git**, and **SSH** config passthrough
@@ -17,8 +15,7 @@ Claude Code works best with `--dangerously-skip-permissions`, but granting that 
 ## Requirements
 
 - macOS (Apple Silicon or Intel)
-- For `claude-run`: [Homebrew](https://brew.sh), [Tailscale](https://tailscale.com) (free)
-- For `claude-docker`: [Docker Desktop](https://docs.docker.com/get-docker/) (or OrbStack)
+- [Docker Desktop](https://docs.docker.com/get-docker/) (or OrbStack)
 
 ## Quick start
 
@@ -27,8 +24,6 @@ git clone https://github.com/vsotreshko/claude-vm
 cd claude-vm
 make install
 ```
-
-### Option A: Docker (lightweight, recommended)
 
 ```bash
 cd ~/my-project
@@ -42,29 +37,7 @@ On first run, `claude-docker` will:
 3. Install npm/pnpm/yarn dependencies if needed
 4. Launch Claude Code with `--dangerously-skip-permissions`
 
-### Option B: Multipass VM (full isolation)
-
-```bash
-cd ~/my-project
-claude-run
-```
-
-On first run, `claude-run` will:
-
-1. Install Multipass via Homebrew if not present
-2. Create the `claude-sandbox` VM (Ubuntu 22.04, 2 CPUs, 4 GB RAM, 30 GB disk)
-3. Bootstrap it with Node.js, Python, Docker, Claude Code, ttyd, Tailscale, and UFW
-4. Mount your current project directory and `~/.claude` into the VM
-5. Launch Claude Code with `--dangerously-skip-permissions` inside the sandbox
-
-After first bootstrap, authenticate Tailscale once:
-
-```bash
-multipass shell claude-sandbox
-sudo tailscale up   # follow the URL, then exit
-```
-
-## Usage — claude-docker
+## Usage
 
 ```bash
 claude-docker                    # launch Claude Code in this repo
@@ -87,22 +60,7 @@ Running `claude-docker` a second time in the same directory attaches to the exis
 
 Running from different directories creates separate containers (one per project).
 
-## Usage — claude-run
-
-```bash
-claude-run                       # launch Claude Code in this repo
-claude-run monitor               # open browser terminal to observe remotely
-claude-run status                # VM info, active sessions, mounts
-claude-run snapshot              # snapshot before risky work
-claude-run snapshots             # list all snapshots
-claude-run restore <n>           # roll back VM to a snapshot
-claude-run stop                  # stop the VM
-claude-run update                # update Claude Code to latest
-```
-
 ## How isolation works
-
-### claude-docker
 
 | What                           | Access                                           |
 | ------------------------------ | ------------------------------------------------ |
@@ -115,22 +73,9 @@ claude-run update                # update Claude Code to latest
 | Rest of your home folder       | Not visible                                      |
 | `/etc/hosts` entries           | Forwarded via `--add-host host-gateway`          |
 
-### claude-run
-
-| What                          | Access                                           |
-| ----------------------------- | ------------------------------------------------ |
-| Current project (`pwd`)       | Mounted read/write at the same absolute path     |
-| `~/.claude`                   | Mounted — credentials and session history shared |
-| Rest of your home folder      | Not visible                                      |
-| `localhost:<port>`            | Forwarded to your Mac (except SSH, ttyd)         |
-| `host.docker.internal:<port>` | Resolved to your Mac                             |
-| Docker inside VM              | Available                                        |
-
 ## Node.js / native binaries
 
-**claude-docker:** Uses a named Docker volume for `node_modules`, so Linux-native binaries work correctly. Dependencies are installed automatically on first run.
-
-**claude-run:** Detects `node_modules` directories and overlays them with VM-local copies using bind mounts. Your Mac's `node_modules` remain untouched.
+Uses a named Docker volume for `node_modules`, so Linux-native binaries work correctly. Dependencies are installed automatically on first run.
 
 ## Repo structure
 
@@ -139,10 +84,8 @@ claude-vm/
 ├── README.md
 ├── Makefile
 ├── .gitignore
-├── claude-run              ← Multipass VM backend
 ├── claude-docker           ← Docker container backend
-├── Dockerfile.claude       ← Docker image definition
-└── vm-bootstrap.sh         ← runs once inside the VM
+└── Dockerfile.claude       ← Docker image definition
 ```
 
 ## Playwright MCP configuration
@@ -177,18 +120,9 @@ The Docker image pre-installs `@playwright/mcp` globally with a matching Chromiu
 
 ## Cleanup
 
-**Docker:**
-
 ```bash
 claude-docker clean              # remove container + volume for current project
 docker rmi claude-code-sandbox   # remove the image entirely
-```
-
-**Multipass VM:**
-
-```bash
-claude-run stop
-multipass delete claude-sandbox --purge
 ```
 
 ## License
