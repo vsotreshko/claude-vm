@@ -37,9 +37,11 @@ PROJECT_NAME="$(basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' | tr -cs 'a
 CONTAINER_NAME="claude-docker-${PROJECT_NAME}"
 VOLUME_NAME="claude-docker-nm-${PROJECT_NAME}"
 GCLOUD_VOL_NAME="claude-docker-gcloud-${PROJECT_NAME}"
+GH_VOL_NAME="claude-docker-gh-${PROJECT_NAME}"
 
 USE_TMUX=false
 USE_GCLOUD=false
+USE_GH=false
 
 check_prereqs() {
   if ! command -v docker &>/dev/null; then
@@ -276,6 +278,7 @@ while [[ "${1:-}" == --* ]]; do
   case "$1" in
     --tmux) USE_TMUX=true; shift ;;
     --gcloud) USE_GCLOUD=true; shift ;;
+    --gh) USE_GH=true; shift ;;
     *) die "Unknown flag '$1'. Run: claude-docker help" ;;
   esac
 done
