@@ -163,7 +163,7 @@ cmd_run() {
   fi
   if [ "$USE_GH" = true ]; then
     startup_cmd="${startup_cmd}sudo chown -R claude:claude /home/claude/.config/gh; "
-    startup_cmd="${startup_cmd}echo '' && echo '==> GitHub auth — create a fine-grained PAT:' && echo '    https://github.com/settings/personal-access-tokens/new?description=claude-docker-${PROJECT_NAME}' && echo '    Select repos to allow, set permissions, then paste the token:' && printf 'Token: ' && read -r _GH_TOKEN && echo \"\$_GH_TOKEN\" | gh auth login --with-token; "
+    startup_cmd="${startup_cmd}echo '' && echo '==> GitHub auth - create a fine-grained PAT:' && echo '    https://github.com/settings/personal-access-tokens/new?description=claude-docker-${PROJECT_NAME}' && echo '    Select repos to allow, set permissions, then paste the token:' && printf 'Token: ' && read -rs _GH_TOKEN && echo && printf '%s' \"\$_GH_TOKEN\" | gh auth login --with-token; unset _GH_TOKEN; "
   fi
   startup_cmd="${startup_cmd}cd '${WORK_DIR}' && claude --dangerously-skip-permissions"
 
