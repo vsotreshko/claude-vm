@@ -11,6 +11,12 @@ RUN curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dea
     > /etc/apt/sources.list.d/google-cloud-sdk.list \
     && apt-get update && apt-get install -y --no-install-recommends google-cloud-cli \
     && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
 ARG HOST_UID=501
 RUN useradd -m -s /bin/bash -G sudo -u $HOST_UID claude && echo 'claude ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 RUN echo 'set -g mouse on' > /home/claude/.tmux.conf && echo 'set -g history-limit 50000' >> /home/claude/.tmux.conf && chown claude:claude /home/claude/.tmux.conf
