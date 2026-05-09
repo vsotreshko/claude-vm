@@ -128,6 +128,9 @@ cmd_run() {
   if [ "$USE_GCLOUD" = true ] || docker volume inspect "$GCLOUD_VOL_NAME" &>/dev/null; then
     vol_flags+=(-v "${GCLOUD_VOL_NAME}:/home/claude/.config/gcloud")
   fi
+  if [ "$USE_GH" = true ] || docker volume inspect "$GH_VOL_NAME" &>/dev/null; then
+    vol_flags+=(-v "${GH_VOL_NAME}:/home/claude/.config/gh")
+  fi
 
   # Build startup command
   local pkg_cmd
