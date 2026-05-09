@@ -109,10 +109,10 @@ The Playwright MCP server needs a couple of flags to work inside Docker. This co
 }
 ```
 
-| Flag                    | Why                                                              |
-| ----------------------- | ---------------------------------------------------------------- |
-| `--no-sandbox`          | Chromium sandboxing doesn't work inside Docker                   |
-| `--ignore-https-errors` | Allows navigating to sites with self-signed certificates         |
+| Flag                    | Why                                                      |
+| ----------------------- | -------------------------------------------------------- |
+| `--no-sandbox`          | Chromium sandboxing doesn't work inside Docker           |
+| `--ignore-https-errors` | Allows navigating to sites with self-signed certificates |
 
 The Docker image pre-installs `@playwright/mcp` globally with a matching Chromium browser, so no `--executable-path` is needed.
 
