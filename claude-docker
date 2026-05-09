@@ -244,6 +244,8 @@ cmd_clean() {
   docker volume rm "$VOLUME_NAME" 2>/dev/null && success "Volume removed" || warn "Volume not found"
   log "Removing gcloud volume '$GCLOUD_VOL_NAME'..."
   docker volume rm "$GCLOUD_VOL_NAME" 2>/dev/null && success "gcloud volume removed" || warn "gcloud volume not found"
+  log "Removing gh volume '$GH_VOL_NAME'..."
+  docker volume rm "$GH_VOL_NAME" 2>/dev/null && success "gh volume removed" || warn "gh volume not found"
 }
 
 cmd_shell() {
@@ -272,11 +274,12 @@ usage() {
   echo ""
   echo -e "  ${GREEN}Management:${NC}"
   echo "    claude-docker stop         Stop the container"
-  echo "    claude-docker clean        Remove container and volumes (node_modules + gcloud)"
+  echo "    claude-docker clean        Remove container and volumes (node_modules + gcloud + gh)"
   echo "    claude-docker update       Rebuild the Docker image (no cache)"
   echo ""
   echo -e "  ${GREEN}Flags:${NC}"
   echo "    --gcloud            Mount per-project gcloud auth (login on first run, persists until clean)"
+  echo "    --gh                Fine-grained GitHub PAT auth (scoped to selected repos, persists until clean)"
   echo ""
 }
 
