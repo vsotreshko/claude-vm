@@ -95,14 +95,14 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 
 ## User flow
 
-| Scenario | Behavior |
-|---|---|
-| First run, no flag | No `gh` in container |
-| First run, `--gh` | Volume created, URL printed, token prompted, `gh auth login` runs |
-| Restart, no flag | Volume detected → mounted silently, no prompt |
-| Restart, `--gh` | Volume mounted, auth runs again (re-token if needed) |
-| `clean` | gh volume removed along with container and node_modules volume |
-| Switch repos/account | `claude-docker clean` → `claude-docker --gh` |
+| Scenario             | Behavior                                                          |
+| -------------------- | ----------------------------------------------------------------- |
+| First run, no flag   | No `gh` in container                                              |
+| First run, `--gh`    | Volume created, URL printed, token prompted, `gh auth login` runs |
+| Restart, no flag     | Volume detected → mounted silently, no prompt                     |
+| Restart, `--gh`      | Volume mounted, auth runs again (re-token if needed)              |
+| `clean`              | gh volume removed along with container and node_modules volume    |
+| Switch repos/account | `claude-docker clean` → `claude-docker --gh`                      |
 
 ## Files changed
 
