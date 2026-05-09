@@ -122,7 +122,7 @@ cmd_run() {
   # Optional config mounts
   [ -f "$HOME/.gitconfig" ] && vol_flags+=(-v "$HOME/.gitconfig:/home/claude/.gitconfig:ro")
   [ -d "$HOME/.ssh" ] && vol_flags+=(-v "$HOME/.ssh:/home/claude/.ssh:ro")
-  if [ "$USE_GCLOUD" = true ] || docker volume inspect "$GCLOUD_VOL_NAME" &>/dev/null 2>&1; then
+  if [ "$USE_GCLOUD" = true ] || docker volume inspect "$GCLOUD_VOL_NAME" &>/dev/null; then
     vol_flags+=(-v "${GCLOUD_VOL_NAME}:/home/claude/.config/gcloud")
   fi
 
