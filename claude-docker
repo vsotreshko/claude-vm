@@ -96,8 +96,8 @@ cmd_run() {
 
   # If container is already running, attach to it
   if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-    log "Attaching to running container '$CONTAINER_NAME' (shell — run 'claude' to start another session)..."
-    docker exec -it "$CONTAINER_NAME" bash -c "cd '${WORK_DIR}' && exec bash"
+    log "Attaching to running container '$CONTAINER_NAME'..."
+    docker exec -it "$CONTAINER_NAME" bash -c "cd '${WORK_DIR}' && claude --dangerously-skip-permissions"
     return
   fi
 
