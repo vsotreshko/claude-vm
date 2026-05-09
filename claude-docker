@@ -115,7 +115,7 @@ cmd_run() {
   vol_flags+=(-v "$PROJECT_DIR:$PROJECT_DIR")
   vol_flags+=(-v "$HOME/.claude:/home/claude/.claude")
   vol_flags+=(-v "$HOME/.claude:$HOME/.claude")
-  [ -f "$HOME/.claude.json" ] && vol_flags+=(-v "$HOME/.claude.json:/tmp/.claude.json.init:ro")
+  [ -f "$HOME/.claude.json" ] && vol_flags+=(-v "$HOME/.claude.json:/home/claude/.claude.json:ro")
 
   # node_modules volume overlay (only if package.json exists)
   if [ -f "$PROJECT_DIR/package.json" ]; then
@@ -146,8 +146,6 @@ cmd_run() {
   fi
 
   local startup_cmd=""
-  # Copy .claude.json from read-only init mount — avoids file bind mount breaking when Claude atomically replaces the file
-  startup_cmd="${startup_cmd}[ -f /tmp/.claude.json.init ] && cp /tmp/.claude.json.init /home/claude/.claude.json; "
   # Fix ownership of node_modules volume (Docker creates it as root)
   if [ -f "$PROJECT_DIR/package.json" ]; then
     startup_cmd="${startup_cmd}sudo chown claude:claude '${PROJECT_DIR}/node_modules'; "
