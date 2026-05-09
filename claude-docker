@@ -156,7 +156,7 @@ cmd_run() {
   fi
   # Install deps if node_modules volume is empty and package.json exists
   if [ -f "$PROJECT_DIR/package.json" ]; then
-    startup_cmd="${startup_cmd}if [ ! -d '${PROJECT_DIR}/node_modules/node_modules' ] && [ -z \"\$(ls -A '${PROJECT_DIR}/node_modules' 2>/dev/null)\" ]; then cd '${PROJECT_DIR}' && ${pkg_cmd}; fi; "
+    startup_cmd="${startup_cmd}if [ ! -d '${PROJECT_DIR}/node_modules/node_modules' ] && [ -z \"\$(ls -A '${PROJECT_DIR}/node_modules' 2>/dev/null)\" ]; then echo '==> Installing dependencies...' && cd '${PROJECT_DIR}' && ${pkg_cmd}; fi; "
   fi
   if [ "$USE_GCLOUD" = true ]; then
     startup_cmd="${startup_cmd}sudo chown -R claude:claude /home/claude/.config/gcloud; echo '==> Running gcloud auth login...' && gcloud auth login --no-launch-browser && gcloud auth application-default login --no-launch-browser; "
@@ -166,7 +166,7 @@ cmd_run() {
     startup_cmd="${startup_cmd}echo '' && echo '==> GitHub auth - create a fine-grained PAT:' && echo '    https://github.com/settings/personal-access-tokens/new?description=claude-docker-${PROJECT_NAME}' && echo '    Select repos to allow, set permissions, then paste the token:' && printf 'Token: ' && read -rs _GH_TOKEN && echo; "
     startup_cmd="${startup_cmd}if [ -z \"\$_GH_TOKEN\" ]; then echo ' ✗ No token provided, skipping gh auth'; unset _GH_TOKEN; else printf '%s' \"\$_GH_TOKEN\" | gh auth login --with-token && unset _GH_TOKEN && (gh auth setup-git 2>/dev/null || echo ' ⚠ git credential helper not configured (gitconfig is read-only, run gh auth setup-git manually if needed)') || { unset _GH_TOKEN; echo ' ✗ gh auth failed - re-run with --gh to retry'; exit 1; }; fi; "
   fi
-  startup_cmd="${startup_cmd}cd '${WORK_DIR}' && claude --dangerously-skip-permissions"
+  startup_cmd="${startup_cmd}echo '==> Starting Claude...' && cd '${WORK_DIR}' && claude --dangerously-skip-permissions"
 
   # Detect host networking support (works on Linux and OrbStack, not Docker Desktop Mac/Win)
   local net_flags=()
