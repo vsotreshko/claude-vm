@@ -115,7 +115,7 @@ cmd_run() {
   vol_flags+=(-v "$PROJECT_DIR:$PROJECT_DIR")
   vol_flags+=(-v "$HOME/.claude:/home/claude/.claude")
   vol_flags+=(-v "$HOME/.claude:$HOME/.claude")
-  [ -f "$HOME/.claude.json" ] && vol_flags+=(-v "$HOME/.claude.json:/home/claude/.claude.json:ro")
+  [ -f "$HOME/.claude.json" ] && vol_flags+=(-v "$HOME/.claude.json:/home/claude/.claude.json")
 
   # node_modules volume overlay (only if package.json exists)
   if [ -f "$PROJECT_DIR/package.json" ]; then
