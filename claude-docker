@@ -232,6 +232,8 @@ cmd_clean() {
   docker rm -f "$CONTAINER_NAME" 2>/dev/null && success "Container removed" || warn "Container not found"
   log "Removing volume '$VOLUME_NAME'..."
   docker volume rm "$VOLUME_NAME" 2>/dev/null && success "Volume removed" || warn "Volume not found"
+  log "Removing gcloud volume '$GCLOUD_VOL_NAME'..."
+  docker volume rm "$GCLOUD_VOL_NAME" 2>/dev/null && success "gcloud volume removed" || warn "gcloud volume not found"
 }
 
 cmd_shell() {
