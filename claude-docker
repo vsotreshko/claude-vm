@@ -36,9 +36,10 @@ PROJECT_DIR="$(find_project_root)"
 PROJECT_NAME="$(basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/-*$//')"
 CONTAINER_NAME="claude-docker-${PROJECT_NAME}"
 VOLUME_NAME="claude-docker-nm-${PROJECT_NAME}"
+GCLOUD_VOL_NAME="claude-docker-gcloud-${PROJECT_NAME}"
 
 USE_TMUX=false
-GCLOUD_LOGIN=false
+USE_GCLOUD=false
 
 check_prereqs() {
   if ! command -v docker &>/dev/null; then
@@ -261,7 +262,7 @@ usage() {
   echo "    claude-docker update       Rebuild the Docker image (no cache)"
   echo ""
   echo -e "  ${GREEN}Flags:${NC}"
-  echo "    --gcloud-login          Run gcloud auth login before starting Claude"
+  echo "    --gcloud            Mount per-project gcloud auth (login on first run, persists until clean)"
   echo ""
 }
 
@@ -269,7 +270,7 @@ usage() {
 while [[ "${1:-}" == --* ]]; do
   case "$1" in
     --tmux) USE_TMUX=true; shift ;;
-    --gcloud-login) GCLOUD_LOGIN=true; shift ;;
+    --gcloud) USE_GCLOUD=true; shift ;;
     *) die "Unknown flag '$1'. Run: claude-docker help" ;;
   esac
 done
