@@ -262,7 +262,7 @@ usage() {
   echo ""
   echo -e "  ${GREEN}Management:${NC}"
   echo "    claude-docker stop         Stop the container"
-  echo "    claude-docker clean        Remove container and node_modules volume"
+  echo "    claude-docker clean        Remove container and volumes (node_modules + gcloud)"
   echo "    claude-docker update       Rebuild the Docker image (no cache)"
   echo ""
   echo -e "  ${GREEN}Flags:${NC}"
