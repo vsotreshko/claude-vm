@@ -28,7 +28,7 @@ USER claude
 RUN npx playwright install chromium
 # Install uv for Python venv management
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/home/claude/.local/bin:$PATH"
+ENV PATH="/home/claude/.local/share/pnpm/bin:/home/claude/.local/bin:$PATH"
 RUN mkdir -p /home/claude/.config /home/claude/.local/share/pnpm
 WORKDIR /work
 ENTRYPOINT ["bash"]
