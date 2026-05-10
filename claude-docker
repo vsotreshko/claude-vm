@@ -151,10 +151,10 @@ cmd_run() {
   fi
 
   local startup_cmd=""
-  # Avoids stale inode: Docker file bind mounts break when Claude atomically replaces the file (write-temp + rename)
-  startup_cmd="${startup_cmd}[ -f /tmp/.claude.json.init ] && cp /tmp/.claude.json.init /home/claude/.claude.json; "
-  # Fallback: restore from newest backup if still missing
-  startup_cmd="${startup_cmd}[ -f /home/claude/.claude.json ] || { latest=\$(ls -t /home/claude/.claude/backups/.claude.json.backup.* 2>/dev/null | head -1); [ -n \"\$latest\" ] && cp \"\$latest\" /home/claude/.claude.json && echo '==> Restored .claude.json from backup'; }; "
+  # Sync credentials: prefer host's .claude.json; fall back to shared copy from last container session
+  startup_cmd="${startup_cmd}if [ -f /tmp/.claude.json.init ]; then cp /tmp/.claude.json.init /home/claude/.claude.json; "
+  startup_cmd="${startup_cmd}elif [ -f /home/claude/.claude/.claude.json.shared ]; then cp /home/claude/.claude/.claude.json.shared /home/claude/.claude.json; "
+  startup_cmd="${startup_cmd}else latest=\$(ls -t /home/claude/.claude/backups/.claude.json.backup.* 2>/dev/null | head -1); [ -n \"\$latest\" ] && cp \"\$latest\" /home/claude/.claude.json && echo '==> Restored .claude.json from backup'; fi; "
   # Fix ownership of node_modules volume (Docker creates it as root)
   if [ -f "$PROJECT_DIR/package.json" ]; then
     startup_cmd="${startup_cmd}sudo chown claude:claude '${PROJECT_DIR}/node_modules'; "
@@ -175,7 +175,7 @@ cmd_run() {
     startup_cmd="${startup_cmd}echo '' && echo '==> GitHub auth - create a fine-grained PAT:' && echo '    https://github.com/settings/personal-access-tokens/new?description=claude-docker-${PROJECT_NAME}' && echo '    Select repos to allow, set permissions, then paste the token:' && printf 'Token: ' && read -rs _GH_TOKEN && echo; "
     startup_cmd="${startup_cmd}if [ -z \"\$_GH_TOKEN\" ]; then echo ' ✗ No token provided, skipping gh auth'; unset _GH_TOKEN; else printf '%s' \"\$_GH_TOKEN\" | gh auth login --with-token && unset _GH_TOKEN && (gh auth setup-git 2>/dev/null || echo ' ⚠ git credential helper not configured (gitconfig is read-only, run gh auth setup-git manually if needed)') || { unset _GH_TOKEN; echo ' ✗ gh auth failed - re-run with --gh to retry'; exit 1; }; fi; "
   fi
-  startup_cmd="${startup_cmd}echo '==> Starting Claude...' && cd '${WORK_DIR}' && claude --dangerously-skip-permissions"
+  startup_cmd="${startup_cmd}echo '==> Starting Claude...' && cd '${WORK_DIR}' && claude --dangerously-skip-permissions; cp /home/claude/.claude.json /home/claude/.claude/.claude.json.shared 2>/dev/null || true"
 
   # Detect host networking support (works on Linux and OrbStack, not Docker Desktop Mac/Win)
   local net_flags=()
@@ -207,6 +207,11 @@ cmd_run() {
     -e ANTHROPIC_API_KEY \
     "$IMAGE_NAME" \
     -c "$startup_cmd"
+
+  # Sync credentials refreshed inside container back to host
+  if [ -f "$HOME/.claude/.claude.json.shared" ]; then
+    cp "$HOME/.claude/.claude.json.shared" "$HOME/.claude.json" 2>/dev/null || true
+  fi
 }
 
 cmd_stop() {
