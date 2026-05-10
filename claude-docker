@@ -97,7 +97,12 @@ cmd_run() {
   # If container is already running, attach to it
   if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
     log "Attaching to running container '$CONTAINER_NAME'..."
-    docker exec -it "$CONTAINER_NAME" bash -c "cd '${WORK_DIR}' && claude --dangerously-skip-permissions"
+    docker exec -it "$CONTAINER_NAME" bash -c "
+      if [ ! -f /home/claude/.claude.json ]; then
+        latest=\$(ls -t /home/claude/.claude/backups/.claude.json.backup.* 2>/dev/null | head -1)
+        [ -n \"\$latest\" ] && cp \"\$latest\" /home/claude/.claude.json && echo '==> Restored .claude.json from backup'
+      fi
+      cd '${WORK_DIR}' && claude --dangerously-skip-permissions"
     return
   fi
 
@@ -115,7 +120,7 @@ cmd_run() {
   vol_flags+=(-v "$PROJECT_DIR:$PROJECT_DIR")
   vol_flags+=(-v "$HOME/.claude:/home/claude/.claude")
   vol_flags+=(-v "$HOME/.claude:$HOME/.claude")
-  [ -f "$HOME/.claude.json" ] && vol_flags+=(-v "$HOME/.claude.json:/home/claude/.claude.json")
+  [ -f "$HOME/.claude.json" ] && vol_flags+=(-v "$HOME/.claude.json:/tmp/.claude.json.init:ro")
 
   # node_modules volume overlay (only if package.json exists)
   if [ -f "$PROJECT_DIR/package.json" ]; then
@@ -146,6 +151,10 @@ cmd_run() {
   fi
 
   local startup_cmd=""
+  # Avoids stale inode: Docker file bind mounts break when Claude atomically replaces the file (write-temp + rename)
+  startup_cmd="${startup_cmd}[ -f /tmp/.claude.json.init ] && cp /tmp/.claude.json.init /home/claude/.claude.json; "
+  # Fallback: restore from newest backup if still missing
+  startup_cmd="${startup_cmd}[ -f /home/claude/.claude.json ] || { latest=\$(ls -t /home/claude/.claude/backups/.claude.json.backup.* 2>/dev/null | head -1); [ -n \"\$latest\" ] && cp \"\$latest\" /home/claude/.claude.json && echo '==> Restored .claude.json from backup'; }; "
   # Fix ownership of node_modules volume (Docker creates it as root)
   if [ -f "$PROJECT_DIR/package.json" ]; then
     startup_cmd="${startup_cmd}sudo chown claude:claude '${PROJECT_DIR}/node_modules'; "
@@ -249,6 +258,45 @@ cmd_clean() {
   docker volume rm "$GH_VOL_NAME" 2>/dev/null && success "gh volume removed" || warn "gh volume not found"
 }
 
+cmd_purge() {
+  check_prereqs
+  local containers volumes
+  containers="$(docker ps -a --filter "name=claude-docker-" --format "{{.Names}}" | sort)"
+  volumes="$(docker volume ls --filter "name=claude-docker-" --format "{{.Name}}" | sort)"
+
+  if [ -z "$containers" ] && [ -z "$volumes" ]; then
+    warn "Nothing to purge — no claude-docker containers or volumes found."
+    return
+  fi
+
+  echo ""
+  echo -e "${RED}This will permanently delete ALL claude-docker sessions:${NC}"
+  echo ""
+  if [ -n "$containers" ]; then
+    echo -e "  ${BLUE}Containers:${NC}"
+    echo "$containers" | sed 's/^/    /'
+  fi
+  if [ -n "$volumes" ]; then
+    echo -e "  ${BLUE}Volumes:${NC}"
+    echo "$volumes" | sed 's/^/    /'
+  fi
+  echo ""
+  printf "  Type 'yes' to confirm: "
+  read -r answer
+  [ "$answer" != "yes" ] && { warn "Aborted."; return; }
+  echo ""
+
+  if [ -n "$containers" ]; then
+    log "Stopping and removing all containers..."
+    echo "$containers" | xargs docker rm -f 2>/dev/null && success "Containers removed" || warn "Some containers could not be removed"
+  fi
+  if [ -n "$volumes" ]; then
+    log "Removing all volumes..."
+    echo "$volumes" | xargs docker volume rm 2>/dev/null && success "Volumes removed" || warn "Some volumes could not be removed"
+  fi
+  success "Purge complete."
+}
+
 cmd_shell() {
   check_prereqs
   if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
@@ -276,6 +324,7 @@ usage() {
   echo -e "  ${GREEN}Management:${NC}"
   echo "    claude-docker stop         Stop the container"
   echo "    claude-docker clean        Remove container and volumes (node_modules + gcloud + gh)"
+  echo "    claude-docker purge        Delete ALL claude-docker containers and volumes (interactive)"
   echo "    claude-docker update       Rebuild the Docker image (no cache)"
   echo ""
   echo -e "  ${GREEN}Flags:${NC}"
@@ -300,6 +349,7 @@ case "${1:-run}" in
   status)    cmd_status ;;
   update)    cmd_update ;;
   clean)     cmd_clean ;;
+  purge)     cmd_purge ;;
   shell)     cmd_shell ;;
   list)      cmd_list ;;
   help|--help|-h) usage ;;
