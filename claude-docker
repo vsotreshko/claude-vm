@@ -42,6 +42,7 @@ GH_VOL_NAME="claude-docker-gh-${PROJECT_NAME}"
 USE_TMUX=false
 USE_GCLOUD=false
 USE_GH=false
+RESUME_SESSION=""
 
 check_prereqs() {
   if ! command -v docker &>/dev/null; then
@@ -102,7 +103,7 @@ cmd_run() {
         latest=\$(ls -t /home/claude/.claude/backups/.claude.json.backup.* 2>/dev/null | head -1)
         [ -n \"\$latest\" ] && cp \"\$latest\" /home/claude/.claude.json && echo '==> Restored .claude.json from backup'
       fi
-      cd '${WORK_DIR}' && claude --dangerously-skip-permissions"
+      cd '${WORK_DIR}' && claude --dangerously-skip-permissions${RESUME_SESSION:+ --resume ${RESUME_SESSION}}"
     return
   fi
 
@@ -175,7 +176,9 @@ cmd_run() {
     startup_cmd="${startup_cmd}echo '' && echo '==> GitHub auth - create a fine-grained PAT:' && echo '    https://github.com/settings/personal-access-tokens/new?description=claude-docker-${PROJECT_NAME}' && echo '    Select repos to allow, set permissions, then paste the token:' && printf 'Token: ' && read -rs _GH_TOKEN && echo; "
     startup_cmd="${startup_cmd}if [ -z \"\$_GH_TOKEN\" ]; then echo ' ✗ No token provided, skipping gh auth'; unset _GH_TOKEN; else printf '%s' \"\$_GH_TOKEN\" | gh auth login --with-token && unset _GH_TOKEN && (gh auth setup-git 2>/dev/null || echo ' ⚠ git credential helper not configured (gitconfig is read-only, run gh auth setup-git manually if needed)') || { unset _GH_TOKEN; echo ' ✗ gh auth failed - re-run with --gh to retry'; exit 1; }; fi; "
   fi
-  startup_cmd="${startup_cmd}echo '==> Starting Claude...' && cd '${WORK_DIR}' && claude --dangerously-skip-permissions; cp /home/claude/.claude.json /home/claude/.claude/.claude.json.shared 2>/dev/null || true"
+  local resume_flag=""
+  [ -n "$RESUME_SESSION" ] && resume_flag="--resume ${RESUME_SESSION}"
+  startup_cmd="${startup_cmd}echo '==> Starting Claude...' && cd '${WORK_DIR}' && claude --dangerously-skip-permissions ${resume_flag}; cp /home/claude/.claude.json /home/claude/.claude/.claude.json.shared 2>/dev/null || true"
 
   # Detect host networking support (works on Linux and OrbStack, not Docker Desktop Mac/Win)
   local net_flags=()
@@ -335,6 +338,7 @@ usage() {
   echo -e "  ${GREEN}Flags:${NC}"
   echo "    --gcloud            Mount per-project gcloud auth (login on first run, persists until clean)"
   echo "    --gh                Fine-grained GitHub PAT auth (scoped to selected repos, persists until clean)"
+  echo "    --resume <id>       Resume a previous Claude session by ID"
   echo ""
 }
 
@@ -344,6 +348,7 @@ while [[ "${1:-}" == --* ]]; do
     --tmux) USE_TMUX=true; shift ;;
     --gcloud) USE_GCLOUD=true; shift ;;
     --gh) USE_GH=true; shift ;;
+    --resume) shift; RESUME_SESSION="${1:?--resume requires a session ID}"; shift ;;
     *) die "Unknown flag '$1'. Run: claude-docker help" ;;
   esac
 done
