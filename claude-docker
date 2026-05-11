@@ -160,11 +160,15 @@ cmd_run() {
     startup_cmd="${startup_cmd}sudo chown claude:claude '${PROJECT_DIR}/node_modules'; "
   fi
   # Ensure pnpm is installed, fix ownership on the freshly mounted shared
-  # store volume (Docker creates it root-owned), and point pnpm at it.
+  # store volume (Docker creates it root-owned), and write ~/.npmrc so any
+  # pnpm version (incl. corepack-pinned via packageManager) picks up the
+  # store location and uses reflinks/copy instead of failing on cross-
+  # subvolume hardlinks (OrbStack uses btrfs subvolumes per Docker volume).
   if [[ "$pkg_cmd" == "pnpm install" ]]; then
     startup_cmd="${startup_cmd}sudo chown claude:claude /home/claude/.pnpm-store; "
     startup_cmd="${startup_cmd}command -v pnpm >/dev/null || sudo npm install -g pnpm; "
-    startup_cmd="${startup_cmd}pnpm config set --global store-dir /home/claude/.pnpm-store; "
+    startup_cmd="${startup_cmd}echo 'store-dir=/home/claude/.pnpm-store' > /home/claude/.npmrc; "
+    startup_cmd="${startup_cmd}echo 'package-import-method=clone-or-copy' >> /home/claude/.npmrc; "
   fi
   # Install deps if node_modules volume is empty and package.json exists
   if [ -f "$PROJECT_DIR/package.json" ]; then
