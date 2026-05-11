@@ -138,6 +138,19 @@ attempt `FICLONE` first, which succeeds on btrfs and shares blocks between
 the store and `node_modules`. On filesystems that don't support reflinks the
 fallback is plain copy — the same as the current behavior, no regression.
 
+**Subset store (expected, small):** When pnpm sees that the configured store
+and the project root are on different filesystems (the project tree is a
+macOS bind mount; the configured store is on the Docker btrfs volume), it
+creates a small "subset store" at `<project>/.pnpm-store/` on the macOS
+side. With `clone-or-copy` this subset store stays tiny — empirically
+around 40MB even for a 1700-package workspace — because it only holds
+metadata, the pnpm binary itself (corepack stages it here), and a small
+index. The actual package bytes never get duplicated into the subset
+store; they're reflinked from the Docker-volume store directly into
+`node_modules`. A pre-fix run that fell back to plain copy mode produced a
+much larger subset store (~1.3GB) — those stale directories should be
+deleted manually after deploying this change.
+
 ### 5. Lifecycle
 
 - `cmd_clean` (per-project): no change. Must NOT remove the shared store
