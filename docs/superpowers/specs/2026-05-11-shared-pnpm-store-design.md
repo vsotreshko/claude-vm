@@ -128,7 +128,7 @@ fd -HI --prune -t d '^\.pnpm-store$' /Users/vsotreshko/Projects -x rm -rf
 1. **Cold cache first run**
 
    ```bash
-   cd /Users/vsotreshko/Projects/_mavie/mavie-api
+   cd /Users/vsotreshko/Projects/_youtube/yt-content-planner
    claude-docker
    ```
 
