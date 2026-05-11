@@ -38,6 +38,7 @@ CONTAINER_NAME="claude-docker-${PROJECT_NAME}"
 VOLUME_NAME="claude-docker-nm-${PROJECT_NAME}"
 GCLOUD_VOL_NAME="claude-docker-gcloud-${PROJECT_NAME}"
 GH_VOL_NAME="claude-docker-gh-${PROJECT_NAME}"
+PNPM_STORE_VOL_NAME="claude-docker-pnpm-store"
 
 USE_TMUX=false
 USE_GCLOUD=false
@@ -142,13 +143,11 @@ cmd_run() {
   local pkg_cmd
   pkg_cmd="$(detect_pkg_manager)"
 
-  # Share host pnpm store with container to avoid re-downloading packages
-  local pnpm_store=""
-  if [[ "$pkg_cmd" == "pnpm install" ]] && command -v pnpm &>/dev/null; then
-    pnpm_store="$(pnpm store path 2>/dev/null | sed 's|/v[0-9].*||')"
-  fi
-  if [ -n "$pnpm_store" ]; then
-    vol_flags+=(-v "$pnpm_store:/home/claude/.pnpm-store")
+  # Share pnpm content-addressed store across all claude-docker containers.
+  # Lives on the same Docker filesystem as the per-project node_modules
+  # volume, so pnpm can hardlink and avoid project-local .pnpm-store fallback.
+  if [[ "$pkg_cmd" == "pnpm install" ]]; then
+    vol_flags+=(-v "${PNPM_STORE_VOL_NAME}:/home/claude/.pnpm-store")
   fi
 
   local startup_cmd=""
@@ -160,9 +159,12 @@ cmd_run() {
   if [ -f "$PROJECT_DIR/package.json" ]; then
     startup_cmd="${startup_cmd}sudo chown claude:claude '${PROJECT_DIR}/node_modules'; "
   fi
-  # Install pnpm if needed
+  # Ensure pnpm is installed, fix ownership on the freshly mounted shared
+  # store volume (Docker creates it root-owned), and point pnpm at it.
   if [[ "$pkg_cmd" == "pnpm install" ]]; then
-    startup_cmd="${startup_cmd}command -v pnpm >/dev/null || sudo npm install -g pnpm; pnpm config set --global store-dir /home/claude/.pnpm-store; "
+    startup_cmd="${startup_cmd}sudo chown claude:claude /home/claude/.pnpm-store; "
+    startup_cmd="${startup_cmd}command -v pnpm >/dev/null || sudo npm install -g pnpm; "
+    startup_cmd="${startup_cmd}pnpm config set --global store-dir /home/claude/.pnpm-store; "
   fi
   # Install deps if node_modules volume is empty and package.json exists
   if [ -f "$PROJECT_DIR/package.json" ]; then
