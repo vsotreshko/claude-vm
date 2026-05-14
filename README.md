@@ -35,7 +35,7 @@ On first run, `claude-docker` will:
 
 1. Build the Docker image (Node LTS + `git`, `gh`, `gcloud`, `ffmpeg`, `uv`, Claude Code, Playwright MCP)
 2. Create a container scoped to this project; mount the project at its absolute host path
-3. Bring your Claude setup along — mount `~/.claude` (settings, agents, hooks, session history) and copy `~/.claude.json` (credentials + per-project state) into the container
+3. Bring your Claude setup along — mount `~/.claude` (settings, agents, hooks, session history) and copy `~/.claude.json` (credentials + per-project state) into the container — no re-login, conversations continue
 4. Install dependencies (`pnpm` / `yarn` / `npm` auto-detected; walks up to find the lock file for monorepos)
 5. Launch Claude Code with `--dangerously-skip-permissions`
 
