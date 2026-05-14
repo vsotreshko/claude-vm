@@ -33,7 +33,7 @@ claude-docker
 
 On first run, `claude-docker` will:
 
-1. Build the Docker image (Node LTS + `git`, `gh`, `gcloud`, `ffmpeg`, `uv`, Claude Code, Playwright MCP)
+1. Build the Docker image (Node LTS + `git`, `gh`, `gcloud`, `ffmpeg`, `uv`, `hasura`, Claude Code, Playwright MCP)
 2. Create a container scoped to this project; mount the project at its absolute host path
 3. Bring your Claude setup along — mount `~/.claude` (settings, agents, hooks, session history) and copy `~/.claude.json` (credentials + per-project state) into the container — no re-login, conversations continue
 4. Install dependencies (`pnpm` / `yarn` / `npm` auto-detected; walks up to find the lock file for monorepos)
@@ -59,7 +59,7 @@ Re-running `claude-docker` in the same directory attaches to the existing contai
 | `node_modules` | Per-project named Docker volume (so Linux-native binaries work) |
 | pnpm content-addressed store | Single Docker volume shared by all `claude-docker` containers |
 | Rest of your home folder | Not visible |
-| Host network | `--network host` on Linux/OrbStack; `host.docker.internal` + `/etc/hosts` forwarding elsewhere |
+| Host network | `--network host` on Linux/OrbStack; `host.docker.internal` + custom `127.0.0.1` entries from `/etc/hosts` elsewhere |
 
 > **`--gcloud` and `--gh` are opt-in once.** The first run with the flag creates and populates the per-project volume. Every later run auto-mounts that volume — no flag needed — until you `claude-docker clean` or `purge`.
 
@@ -161,7 +161,7 @@ The Docker image preinstalls `@playwright/mcp` and a matching Chromium browser. 
 - **`~/.claude.json` is copied, not bind-mounted.** Concurrent edits inside and outside the container during a session can race; the last writer on exit wins. In practice a single host session + a single container session is fine.
 - **`~/.gitconfig` and `~/.ssh` are read-only** inside the container. Tools that try to write them (`gh auth setup-git`, `ssh-keygen`) will fail; configure them on the host.
 - **gcloud / gh / pnpm-store volumes persist** until `claude-docker clean` (per project) or `claude-docker purge` (all). They are not garbage-collected automatically.
-- **Image is ~3–4 GB.** Node LTS + Chromium + gcloud SDK + gh + ffmpeg + uv. The first `make install` and first `claude-docker` are slow; everything after is fast.
+- **Image is ~3–4 GB.** Node LTS + Chromium + gcloud SDK + gh + ffmpeg + uv + hasura CLI. The first `make install` and first `claude-docker` are slow; everything after is fast.
 - **Container runs as your host UID with passwordless sudo.** Inside the container, Claude can do anything root can — `apt-get install`, `chmod`, etc. The isolation guarantee is that "anything" stops at the container boundary, not that Claude is unprivileged inside.
 
 ## Cleanup
