@@ -47,19 +47,19 @@ Re-running `claude-docker` in the same directory attaches to the existing contai
 
 ### What the container can see
 
-| What | How |
-| --- | --- |
-| Current project (walks up to monorepo root via lock file) | Bind-mounted read/write at the same absolute path as on host |
-| `~/.claude` (settings, agents, hooks, history) | Bind-mounted read/write at **both** `/home/claude/.claude` and the host's `$HOME/.claude` path (so Claude finds it whether it looks at `$HOME` or absolute paths stored in session files) |
-| `~/.claude.json` (credentials, per-project state) | Copied in at start, synced back on exit (see below) |
-| `~/.gitconfig` | Bind-mounted read-only (if exists) |
-| `~/.ssh` | Bind-mounted read-only (if exists) |
-| `~/.config/gcloud` | Per-project Docker volume, initialized with `--gcloud` |
-| GitHub auth | Per-project Docker volume, initialized with `--gh` |
-| `node_modules` | Per-project named Docker volume (so Linux-native binaries work) |
-| pnpm content-addressed store | Single Docker volume shared by all `claude-docker` containers |
-| Rest of your home folder | Not visible |
-| Host network | `--network host` on Linux/OrbStack; `host.docker.internal` + custom `127.0.0.1` entries from `/etc/hosts` elsewhere |
+| What                                                      | How                                                                                                                                                                                       |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Current project (walks up to monorepo root via lock file) | Bind-mounted read/write at the same absolute path as on host                                                                                                                              |
+| `~/.claude` (settings, agents, hooks, history)            | Bind-mounted read/write at **both** `/home/claude/.claude` and the host's `$HOME/.claude` path (so Claude finds it whether it looks at `$HOME` or absolute paths stored in session files) |
+| `~/.claude.json` (credentials, per-project state)         | Copied in at start, synced back on exit (see below)                                                                                                                                       |
+| `~/.gitconfig`                                            | Bind-mounted read-only (if exists)                                                                                                                                                        |
+| `~/.ssh`                                                  | Bind-mounted read-only (if exists)                                                                                                                                                        |
+| `~/.config/gcloud`                                        | Per-project Docker volume, initialized with `--gcloud`                                                                                                                                    |
+| GitHub auth                                               | Per-project Docker volume, initialized with `--gh`                                                                                                                                        |
+| `node_modules`                                            | Per-project named Docker volume (so Linux-native binaries work)                                                                                                                           |
+| pnpm content-addressed store                              | Single Docker volume shared by all `claude-docker` containers                                                                                                                             |
+| Rest of your home folder                                  | Not visible                                                                                                                                                                               |
+| Host network                                              | `--network host` on Linux/OrbStack; `host.docker.internal` + custom `127.0.0.1` entries from `/etc/hosts` elsewhere                                                                       |
 
 > **`--gcloud` and `--gh` are opt-in once.** The first run with the flag creates and populates the per-project volume. Every later run auto-mounts that volume — no flag needed — until you `claude-docker clean` or `purge`.
 
@@ -77,25 +77,25 @@ Net effect: same conversation history and credentials inside and outside the con
 
 **Commands**
 
-| Command | What it does |
-| --- | --- |
-| `claude-docker` | Launch (or attach to) Claude Code for the current project |
-| `claude-docker shell` | Open a bash shell inside the running container |
-| `claude-docker status` | Show container info and mounts |
-| `claude-docker list` | List all running `claude-docker` containers |
-| `claude-docker stop` | Stop this project's container |
-| `claude-docker clean` | Remove this project's container and volumes (`node_modules`, `gcloud`, `gh`) |
-| `claude-docker purge` | **Delete all** `claude-docker` containers and volumes across every project (interactive confirm) |
-| `claude-docker update` | Rebuild the Docker image with `--no-cache` |
-| `claude-docker help` | Show help |
+| Command                | What it does                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| `claude-docker`        | Launch (or attach to) Claude Code for the current project                                        |
+| `claude-docker shell`  | Open a bash shell inside the running container                                                   |
+| `claude-docker status` | Show container info and mounts                                                                   |
+| `claude-docker list`   | List all running `claude-docker` containers                                                      |
+| `claude-docker stop`   | Stop this project's container                                                                    |
+| `claude-docker clean`  | Remove this project's container and volumes (`node_modules`, `gcloud`, `gh`)                     |
+| `claude-docker purge`  | **Delete all** `claude-docker` containers and volumes across every project (interactive confirm) |
+| `claude-docker update` | Rebuild the Docker image with `--no-cache`                                                       |
+| `claude-docker help`   | Show help                                                                                        |
 
 **Flags** (placed before the command)
 
-| Flag | What it does |
-| --- | --- |
-| `--gcloud` | Initialize per-project gcloud auth on first run; auto-mounted thereafter |
-| `--gh` | Prompt for a fine-grained GitHub PAT and configure `gh` for this project; auto-mounted thereafter |
-| `--resume <id>` | Resume a previous Claude session by ID |
+| Flag            | What it does                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------- |
+| `--gcloud`      | Initialize per-project gcloud auth on first run; auto-mounted thereafter                          |
+| `--gh`          | Prompt for a fine-grained GitHub PAT and configure `gh` for this project; auto-mounted thereafter |
+| `--resume <id>` | Resume a previous Claude session by ID                                                            |
 
 ## Optional integrations
 
@@ -138,17 +138,21 @@ The Docker image preinstalls `@playwright/mcp` and a matching Chromium browser. 
     "playwright": {
       "type": "stdio",
       "command": "npx",
-      "args": ["@playwright/mcp@latest", "--no-sandbox", "--ignore-https-errors"],
+      "args": [
+        "@playwright/mcp@latest",
+        "--no-sandbox",
+        "--ignore-https-errors"
+      ],
       "env": {}
     }
   }
 }
 ```
 
-| Flag | Why |
-| --- | --- |
-| `--no-sandbox` | Chromium sandboxing doesn't work inside Docker |
-| `--ignore-https-errors` | Allow self-signed certificates |
+| Flag                    | Why                                            |
+| ----------------------- | ---------------------------------------------- |
+| `--no-sandbox`          | Chromium sandboxing doesn't work inside Docker |
+| `--ignore-https-errors` | Allow self-signed certificates                 |
 
 > **Project-level overrides:** if `~/.claude.json` has a project-level `mcpServers.playwright` entry under your project's path key, it overrides the global one. Add the same flags there or remove the project entry.
 
